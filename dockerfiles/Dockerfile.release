@@ -95,14 +95,18 @@ RUN git checkout ${TAG} \
 
 RUN mkdir -p /usr/local/xft/lib \
     && cp /root/xFasterTransformer/build/libxfastertransformer.so /usr/local/xft/lib \
+    && cp /root/xFasterTransformer/build/libxft_comm_helper.so /usr/local/xft/lib \
     && cp -r /root/xFasterTransformer/include /usr/local/xft/ \
     && mkdir -p  /usr/local/include/xft/ \
     && ln -s /usr/local/xft/include /usr/local/include/xft/include
 
 WORKDIR /root/
 
-RUN rm -rf /root/xFasterTransformer \
-    && apt-get remove -y \
+RUN rm -rf /root/xFasterTransformer
+
+RUN git clone https://github.com/intel/xFasterTransformer.git
+
+RUN apt-get remove -y \
     libpython3.10-minimal \
     linux-libc-dev \
     git \
