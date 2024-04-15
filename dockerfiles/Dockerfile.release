@@ -53,7 +53,7 @@ RUN ./configure --prefix=/usr/bin/python3.8 --enable-optimizations \
     && echo "export PATH=/usr/bin/python3.8:\$PATH" >> ~/.bashrc
 
 RUN pip install --no-cache-dir torch==2.0.1+cpu --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.36.0 sentencepiece==0.1.99 accelerate==0.23.0 \
+RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.38.1 sentencepiece==0.1.99 accelerate==0.23.0 protobuf tiktoken \
     && ln -s /usr/bin/python3.8/lib/python3.8/site-packages/cmake/data/bin/cmake /usr/bin/cmake
 
 # Install oneCCL
