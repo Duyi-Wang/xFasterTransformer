@@ -52,8 +52,8 @@ RUN ./configure --prefix=/usr/bin/python3.8 --enable-optimizations \
     && rm -rf /tmp/* \
     && echo "export PATH=/usr/bin/python3.8:\$PATH" >> ~/.bashrc
 
-RUN pip install --no-cache-dir torch==2.0.1+cpu --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.40.0 sentencepiece==0.1.99 accelerate==0.23.0 protobuf tiktoken transformers-stream-generator einops \
+RUN pip install --no-cache-dir torch==2.3.0+cpu --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.41.2 sentencepiece==0.1.99 accelerate==0.23.0 protobuf tiktoken transformers-stream-generator einops \
     && ln -s /usr/bin/python3.8/lib/python3.8/site-packages/cmake/data/bin/cmake /usr/bin/cmake
 
 # Install oneCCL
@@ -68,17 +68,8 @@ RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/oneCCL \
 
 RUN echo "source /usr/local/oneCCL/env/setvars.sh" >> ~/.bashrc
 
-WORKDIR /usr/local/
-RUN rm -rf /tmp/oneCCL
-
-RUN wget -q https://github.com/oneapi-src/oneDNN/releases/download/v0.21/mklml_lnx_2019.0.5.20190502.tgz \
-    && tar -xzf mklml_lnx_2019.0.5.20190502.tgz \
-    && rm -f mklml_lnx_2019.0.5.20190502.tgz
-
-RUN echo "export LD_LIBRARY_PATH=/usr/local/mklml_lnx_2019.0.5.20190502/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc \
-    && echo "export LD_PRELOAD=libiomp5.so:\$LD_PRELOAD" >> /root/.bashrc
-
 WORKDIR /root/
+RUN rm -rf /tmp/oneCCL
 
 RUN git clone https://github.com/intel/xFasterTransformer.git
 
@@ -100,11 +91,13 @@ RUN mkdir -p /usr/local/xft/lib \
     && mkdir -p  /usr/local/include/xft/ \
     && ln -s /usr/local/xft/include /usr/local/include/xft/include
 
+RUN echo "export \$(python -c 'import xfastertransformer as xft; print(xft.get_env())')" >> ~/.bashrc
+
 WORKDIR /root/
 
 RUN rm -rf /root/xFasterTransformer
 
-RUN git clone --depth 1 https://github.com/intel/xFasterTransformer.git
+RUN git clone --depth 1 -b ${TAG} https://github.com/intel/xFasterTransformer.git
 
 RUN apt-get remove -y \
     libpython3.10-minimal \
