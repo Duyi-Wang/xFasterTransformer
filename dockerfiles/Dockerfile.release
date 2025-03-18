@@ -12,107 +12,79 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-FROM ubuntu:22.04
+FROM ubuntu:24.04 AS base
 
 ARG TAG=main
 
 RUN apt-get update \ 
     && apt-get upgrade -y \ 
     && apt-get install -y --no-install-recommends \
-    gcc-12 \
-    g++-12 \
+    g++-11 \
+    gcc-11 \
     make \
     wget \
+    vim \
     libnuma-dev \
     numactl \
     git \
     pkg-config \
     software-properties-common \
-    zlib1g-dev \
-    libssl-dev \
-    libffi-dev \
-    libbz2-dev \
-    liblzma-dev \
-    libsqlite3-dev \
-    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 60 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 60 \
+    python3-pip \
+    python3.12-dev \
+    gcc-13 \
+    g++-13 \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 60 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 60 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3 60 \
     && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install python
-WORKDIR /tmp
-RUN wget -q https://www.python.org/ftp/python/3.8.10/Python-3.8.10.tgz \
-    && tar -xzvf Python-3.8.10.tgz
-WORKDIR /tmp/Python-3.8.10
-RUN ./configure --prefix=/usr/bin/python3.8 --enable-optimizations \
-    && make -j \
-    && make install \
-    && update-alternatives --install /usr/bin/python python /usr/bin/python3.8/bin/python3.8 60 \
-    && update-alternatives --install /usr/bin/pip pip /usr/bin/python3.8/bin/pip3 60 \
-    && python -m pip install --no-cache-dir --upgrade pip setuptools \
-    && pip install --no-cache-dir wheel \
-    && rm -rf /tmp/* \
-    && echo "export PATH=/usr/bin/python3.8:\$PATH" >> ~/.bashrc
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/lib/python3.12/EXTERNALLY-MANAGED
 
 RUN pip install --no-cache-dir torch==2.3.0+cpu --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.43.3 sentencepiece==0.2.0 accelerate==0.31.0 protobuf tiktoken transformers-stream-generator einops \
+RUN pip install --no-cache-dir cmake==3.26.1 transformers==4.43.3 sentencepiece==0.2.0 accelerate==0.31.0 numpy==1.26.4 protobuf tiktoken transformers-stream-generator einops \
     && ln -s /usr/bin/python3.8/lib/python3.8/site-packages/cmake/data/bin/cmake /usr/bin/cmake
 
 # Install oneCCL
-RUN git clone https://github.com/oneapi-src/oneCCL.git /tmp/oneCCL
-WORKDIR /tmp/oneCCL
-RUN git checkout 2021.10 \
+RUN git clone https://github.com/oneapi-src/oneCCL.git /tmp/oneCCL \
+    && cd /tmp/oneCCL \
+    && git checkout 2021.10 \
     && sed -i 's/cpu_gpu_dpcpp/./g' cmake/templates/oneCCLConfig.cmake.in \
-    && mkdir build
-WORKDIR /tmp/oneCCL/build
-RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/oneCCL \
-    && make -j install
-
-RUN echo "source /usr/local/oneCCL/env/setvars.sh" >> ~/.bashrc
-
-WORKDIR /root/
-RUN rm -rf /tmp/oneCCL
-
-RUN git clone https://github.com/intel/xFasterTransformer.git
-
-SHELL ["/bin/bash", "-c"]
-WORKDIR /root/xFasterTransformer
-RUN git checkout ${TAG} \
-    && export "LD_LIBRARY_PATH=/usr/local/mklml_lnx_2019.0.5.20190502/lib:$LD_LIBRARY_PATH" \
-    && export "PATH=/usr/bin/python3.8:$PATH" \
-    && echo "source /usr/local/oneCCL/env/setvars.sh" >> ~/.bash_profile \
-    && source ~/.bash_profile \
-    && python setup.py build \
-    && python setup.py egg_info bdist_wheel --verbose \
-    && pip install --no-cache-dir dist/*
-
-RUN mkdir -p /usr/local/xft/lib \
-    && cp /root/xFasterTransformer/build/libxfastertransformer.so /usr/local/xft/lib \
-    && cp /root/xFasterTransformer/build/libxft_comm_helper.so /usr/local/xft/lib \
-    && cp -r /root/xFasterTransformer/include /usr/local/xft/ \
-    && mkdir -p  /usr/local/include/xft/ \
-    && ln -s /usr/local/xft/include /usr/local/include/xft/include
-
-RUN echo "export \$(python -c 'import xfastertransformer as xft; print(xft.get_env())')" >> ~/.bashrc
+    && mkdir build \
+    && cd build \
+    && cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/oneCCL -DCMAKE_C_COMPILER=/usr/bin/gcc-11 -DCMAKE_CXX_COMPILER=/usr/bin/g++-11 \
+    && make -j install \
+    && cd /root/ \
+    && rm -rf /tmp/oneCCL \
+    && echo "source /usr/local/oneCCL/env/setvars.sh" >> ~/.bashrc
 
 WORKDIR /root/
-
-RUN rm -rf /root/xFasterTransformer
 
 RUN git clone --depth 1 -b ${TAG} https://github.com/intel/xFasterTransformer.git
 
-RUN apt-get remove -y \
-    libpython3.10-minimal \
-    linux-libc-dev \
-    git \
-    git-man \
-    wget \
-    polkitd \
-    libpolkit-agent-1-0 \
-    libpolkit-gobject-1-0 \
-    dbus \
-    libdbus-1-3 \
-    libapparmor1 \
-    libldap-2.5-0 \
-    libbz2-dev \
-    libsqlite3-dev
+FROM base as builder
+
+SHELL ["/bin/bash", "-c"]
+WORKDIR /root/xFasterTransformer
+
+RUN source /usr/local/oneCCL/env/setvars.sh \
+    && mkdir build \ 
+    && cd build/ \
+    && cmake .. \
+    && mv /root/xFasterTransformer/3rdparty/mkl/local/* /root/xFasterTransformer/3rdparty/mkl/ \
+    && make -j \
+    && cd /root/xFasterTransformer \
+    && python setup.py egg_info bdist_wheel --verbose
+
+
+FROM base
+
+COPY --from=builder /root/xFasterTransformer/dist/xfastertransformer-1.8.2-cp312-cp312-linux_x86_64.whl /tmp/
+COPY --from=builder /root/xFasterTransformer/build/libxfastertransformer.so /usr/local/xft/lib/
+COPY --from=builder /root/xFasterTransformer/build/libxft_comm_helper.so /usr/local/xft/lib/
+COPY --from=builder /root/xFasterTransformer/include /usr/local/xft/include
+
+RUN pip install /tmp/xfastertransformer-*.whl  --no-cache-dir \
+    && rm -rf /tmp/xfastertransformer-*.whl
+
+ENV LD_PRELOAD=/usr/local/lib/python3.12/dist-packages/xfastertransformer/libiomp5.so
+
